@@ -1,0 +1,49 @@
+# Dependencies
+node_modules
+
+# Build outputs
+.next
+out
+dist
+build
+
+# Environment files
+.env*
+
+# Lock files
+pnpm-lock.yaml
+package-lock.json
+yarn.lock
+
+# Database
+drizzle/
+
+# Coverage
+coverage
+*.lcov
+
+# Cache
+.cache
+.tmp
+.temp
+
+# OS
+.DS_Store
+
+# IDE
+.vscode
+.idea
+
+# Git
+.git
+
+# Docker
+Dockerfile*
+
+# Generated files
+*.min.js
+*.min.css
+*.map
+
+# Logs
+*.log

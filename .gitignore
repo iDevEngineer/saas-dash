@@ -1,0 +1,143 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# Dependencies
+/node_modules
+/.pnp
+.pnp.*
+.yarn/*
+!.yarn/patches
+!.yarn/plugins
+!.yarn/releases
+!.yarn/versions
+
+# Testing
+/coverage
+*.lcov
+.nyc_output
+/test-results/
+/playwright-report/
+/playwright/.cache/
+/tests/screenshots/
+tests/auth-debug.spec.ts
+test-auth.ts
+test-db-auth.ts
+reset-db-for-better-auth.ts
+seed-auth-only.ts
+src/lib/db/fix-auth-accounts.ts
+src/app/api/test-auth/
+
+# Next.js
+/.next/
+/out/
+/dist/
+
+# Production
+/build
+*.pid
+*.seed
+*.pid.lock
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+lerna-debug.log*
+
+# Environment variables
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+!.env.example
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.iml
+
+# Database
+*.sqlite
+*.sqlite3
+*.db
+drizzle/
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+.tmp/
+.temp/
+.cache/
+*.tmp
+*.temp
+
+# Docker
+*.dockerignore
+!.dockerignore
+
+# Certificates
+*.pem
+*.key
+*.crt
+*.p12
+
+# Package files
+*.dmg
+*.iso
+*.tar
+*.zip
+*.gz
+*.rar
+*.7z
+
+# Backup files
+*.backup
+*.bak
+*.old
+
+# Editor directories and files
+.idea
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Personal/Local configurations
+.claude/
+.serena/
+CLAUDE.md
+test-session.ts
+src/lib/db/migrations/
