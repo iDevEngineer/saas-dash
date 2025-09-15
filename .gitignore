@@ -145,6 +145,9 @@ logs/
 .serena/
 CLAUDE.md
 test-session.ts
+debug-*.js
+test-cors.html
 src/lib/db/migrations/
 content/
+docs/
 docs-backup/

@@ -12,6 +12,8 @@ export type Permission =
   | 'access_admin_panel'
   | 'manage_pricing'
   | 'manage_email'
+  | 'manage_webhooks'
+  | 'view_audit_logs'
   | 'manage_users'
   | 'manage_system_settings';
 

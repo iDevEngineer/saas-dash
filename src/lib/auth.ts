@@ -39,7 +39,7 @@ export const auth = betterAuth({
         return await bcrypt.compare(password, hash);
       },
     },
-    sendEmailVerificationOnSignUp: async ({
+    sendVerificationEmail: async ({
       user,
       url,
     }: {
@@ -131,9 +131,40 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 30, // 30 days
     updateAge: 60 * 60 * 24, // 1 day - session updated if older than this
-    cookieName: 'better-auth.session',
   },
-  trustedOrigins: [process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'],
+  trustedOrigins: (() => {
+    const origins: string[] = [];
+
+    // Add production/staging origins
+    if (process.env.BETTER_AUTH_URL) origins.push(process.env.BETTER_AUTH_URL);
+    if (process.env.NEXT_PUBLIC_APP_URL) origins.push(process.env.NEXT_PUBLIC_APP_URL);
+
+    // Add dynamic localhost origins for development
+    if (process.env.NODE_ENV === 'development') {
+      const port = process.env.PORT || '3000';
+      origins.push(`http://localhost:${port}`);
+    }
+
+    return origins.length > 0 ? origins : ['http://localhost:3000'];
+  })(),
+  cors: {
+    origins: (() => {
+      const origins: string[] = [];
+
+      // Add production/staging origins
+      if (process.env.BETTER_AUTH_URL) origins.push(process.env.BETTER_AUTH_URL);
+      if (process.env.NEXT_PUBLIC_APP_URL) origins.push(process.env.NEXT_PUBLIC_APP_URL);
+
+      // Add dynamic localhost origins for development
+      if (process.env.NODE_ENV === 'development') {
+        const port = process.env.PORT || '3000';
+        origins.push(`http://localhost:${port}`);
+      }
+
+      return origins.length > 0 ? origins : ['http://localhost:3000'];
+    })(),
+    credentials: true,
+  },
 });
 
 // Export types for TypeScript

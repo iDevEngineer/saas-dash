@@ -37,19 +37,30 @@ export default function SignInPage() {
     const password = formData.get('password') as string;
 
     try {
-      const { error } = await signIn.email({
+      const result = await signIn.email({
         email,
         password,
         callbackURL: callbackUrl,
       });
 
-      if (error) {
+      console.log('SignIn result:', result);
+
+      if (result.error) {
+        console.error('SignIn error:', result.error);
         setError('Invalid email or password');
+      } else if (result.data) {
+        console.log('SignIn successful, data:', result.data);
+
+        // Wait a brief moment for cookies to be set
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Force a full page navigation instead of client-side routing
+        window.location.href = callbackUrl;
       } else {
-        router.push(callbackUrl);
-        router.refresh();
+        setError('An unexpected error occurred.');
       }
-    } catch {
+    } catch (error) {
+      console.error('SignIn exception:', error);
       setError('An error occurred. Please try again.');
     } finally {
       setIsLoading(false);

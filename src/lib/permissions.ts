@@ -27,6 +27,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'access_admin_panel',
     'manage_pricing',
     'manage_email',
+    'manage_webhooks',
+    'view_audit_logs',
   ],
   super_admin: [
     'view_dashboard',
@@ -38,6 +40,8 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'access_admin_panel',
     'manage_pricing',
     'manage_email',
+    'manage_webhooks',
+    'view_audit_logs',
     'manage_users',
     'manage_system_settings',
   ],
@@ -151,6 +155,20 @@ export function canManageUsers(user: UserWithRole): boolean {
  */
 export function canManageSystemSettings(user: UserWithRole): boolean {
   return hasPermission(user, 'manage_system_settings');
+}
+
+/**
+ * Check if a user can manage webhooks
+ */
+export function canManageWebhooks(user: UserWithRole): boolean {
+  return hasPermission(user, 'manage_webhooks');
+}
+
+/**
+ * Check if a user can view audit logs
+ */
+export function canViewAuditLogs(user: UserWithRole): boolean {
+  return hasPermission(user, 'view_audit_logs');
 }
 
 /**

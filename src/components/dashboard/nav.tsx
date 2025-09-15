@@ -14,6 +14,8 @@ import {
   LogOut,
   DollarSign,
   Mail,
+  Webhook,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { signOut } from '@/lib/auth-client';
@@ -61,6 +63,18 @@ const adminNavigation: NavigationItem[] = [
     href: '/dashboard/admin/email',
     icon: Mail,
     permission: 'manage_email',
+  },
+  {
+    name: 'Webhooks',
+    href: '/dashboard/admin/webhooks',
+    icon: Webhook,
+    permission: 'manage_webhooks',
+  },
+  {
+    name: 'Audit Logs',
+    href: '/dashboard/admin/audit',
+    icon: FileText,
+    permission: 'view_audit_logs',
   },
 ];
 
