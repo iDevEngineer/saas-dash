@@ -15,16 +15,21 @@
 *.lcov
 .nyc_output
 /test-results/
+/tests/test-results/
+/tests/playwright-report/
 /playwright-report/
 /playwright/.cache/
 /tests/screenshots/
+/tests/utils/
 tests/auth-debug.spec.ts
-test-auth.ts
-test-db-auth.ts
 reset-db-for-better-auth.ts
 seed-auth-only.ts
 src/lib/db/fix-auth-accounts.ts
 src/app/api/test-auth/
+*.test.js
+*.spec.js
+test-*.js
+*-test.js
 
 # Next.js
 /.next/
@@ -141,3 +146,5 @@ logs/
 CLAUDE.md
 test-session.ts
 src/lib/db/migrations/
+content/
+docs-backup/

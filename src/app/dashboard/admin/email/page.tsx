@@ -596,7 +596,8 @@ export default function EmailAdminPage() {
                 <Settings className="h-4 w-4" />
                 <AlertDescription>
                   Email configuration is now managed through the database. Environment variables are
-                  used as fallback. See the EMAIL_SETUP.md file for detailed setup instructions.
+                  used as fallback. See the docs/EMAIL_SETUP.md file for detailed setup
+                  instructions.
                 </AlertDescription>
               </Alert>
 
