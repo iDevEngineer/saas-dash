@@ -18,8 +18,8 @@ export class EmailService {
   constructor() {
     // Initialize with legacy config first for immediate availability
     this.initializeLegacy();
-    // Then asynchronously upgrade to database config
-    this.initializationPromise = this.initialize();
+    // Database initialization will be deferred until first use
+    this.initializationPromise = null;
   }
 
   private async initialize() {
@@ -79,7 +79,11 @@ export class EmailService {
   }
 
   private async ensureInitialized() {
-    if (!this.isInitialized) {
+    if (!this.isInitialized && this.currentConfig === legacyConfig) {
+      // Start database initialization on first use
+      if (!this.initializationPromise) {
+        this.initializationPromise = this.initialize();
+      }
       await this.initializationPromise;
     }
   }
@@ -232,6 +236,12 @@ export class EmailService {
 
   // Health check method
   async healthCheck(): Promise<{ isHealthy: boolean; providers: Record<string, boolean> }> {
+    try {
+      await this.ensureInitialized();
+    } catch (error) {
+      console.warn('Health check: Database initialization failed, using legacy config:', error);
+    }
+
     const providerHealth: Record<string, boolean> = {};
 
     for (const [name, provider] of this.providers.entries()) {
