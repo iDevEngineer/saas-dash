@@ -16,6 +16,7 @@ import {
   Mail,
   Webhook,
   FileText,
+  Key,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { signOut } from '@/lib/auth-client';
@@ -63,6 +64,12 @@ const adminNavigation: NavigationItem[] = [
     href: '/dashboard/admin/email',
     icon: Mail,
     permission: 'manage_email',
+  },
+  {
+    name: 'API Keys',
+    href: '/dashboard/admin/api-keys',
+    icon: Key,
+    permission: 'manage_api_keys',
   },
   {
     name: 'Webhooks',

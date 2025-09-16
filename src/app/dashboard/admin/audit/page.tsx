@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSession } from '@/lib/auth-client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -13,11 +14,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import {
   Shield,
   User,
@@ -28,38 +25,60 @@ import {
   Search,
   Activity,
   Users,
-  Zap
+  Zap,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { AuditEventDetailsDialog } from '@/components/admin/audit-event-details-dialog';
 
 interface AuditEvent {
-  id: number;
-  eventId: string;
+  id: string;
+  organizationId: string;
   eventType: string;
-  aggregateId: string;
-  aggregateType: string;
-  actorId?: string;
-  actorType: string;
-  occurredAt: string;
-  eventData: Record<string, any>;
+  eventCategory: string;
+  severity: string;
+  description: string;
+  userId?: string;
+  userName?: string;
+  resourceType: string;
+  resourceId: string;
   metadata: Record<string, any>;
-  ipAddress?: string;
+  timestamp: string;
+  source: string;
 }
 
 interface AuditStats {
-  eventTypes: Record<string, number>;
-  actorTypes: Record<string, number>;
-  totalEvents: number;
+  totals: {
+    events: number;
+    uniqueUsers: number;
+    eventTypes: number;
+    highSeverityEvents: number;
+    failedActions: number;
+  };
+  byCategory: Array<{
+    category: string;
+    count: number;
+    percentage: number;
+  }>;
+  bySeverity: Array<{
+    severity: string;
+    count: number;
+    percentage: number;
+  }>;
+  topEventTypes: Array<{
+    eventType: string;
+    count: number;
+  }>;
 }
 
 export default function AuditPage() {
+  const { data: session } = useSession();
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [stats, setStats] = useState<AuditStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [selectedEvent, setSelectedEvent] = useState<AuditEvent | null>(null);
   const [showDetailsDialog, setShowDetailsDialog] = useState(false);
+  const [organizationId, setOrganizationId] = useState<string | null>(null);
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -74,12 +93,43 @@ export default function AuditPage() {
   const [hasMore, setHasMore] = useState(true);
   const limit = 50;
 
+  // Fetch user's organization on mount
   useEffect(() => {
-    fetchAuditEvents();
-    fetchAuditStats();
-  }, [page, selectedEventType, selectedActorType, selectedAggregateType, startDate, endDate]);
+    const fetchOrganization = async () => {
+      if (!session?.user) return;
+
+      try {
+        const response = await fetch('/api/me/organization');
+        if (response.ok) {
+          const data = await response.json();
+          setOrganizationId(data.organizationId);
+        }
+      } catch (error) {
+        console.error('Failed to fetch organization:', error);
+      }
+    };
+
+    fetchOrganization();
+  }, [session]);
+
+  useEffect(() => {
+    if (organizationId) {
+      fetchAuditEvents();
+      fetchAuditStats();
+    }
+  }, [
+    organizationId,
+    page,
+    selectedEventType,
+    selectedActorType,
+    selectedAggregateType,
+    startDate,
+    endDate,
+  ]);
 
   const fetchAuditEvents = async () => {
+    if (!organizationId) return;
+
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -87,26 +137,25 @@ export default function AuditPage() {
         offset: (page * limit).toString(),
       });
 
-      if (selectedEventType && selectedEventType !== 'all') params.append('eventTypes', selectedEventType);
-      if (selectedActorType && selectedActorType !== 'all') params.append('actorType', selectedActorType);
-      if (selectedAggregateType && selectedAggregateType !== 'all') params.append('aggregateTypes', selectedAggregateType);
+      if (selectedEventType && selectedEventType !== 'all')
+        params.append('eventType', selectedEventType);
+      if (selectedActorType && selectedActorType !== 'all')
+        params.append('source', selectedActorType);
+      if (selectedAggregateType && selectedAggregateType !== 'all')
+        params.append('resourceType', selectedAggregateType);
       if (startDate) params.append('startDate', startDate.toISOString());
       if (endDate) params.append('endDate', endDate.toISOString());
 
-      const response = await fetch(`/api/audit/events?${params}`, {
-        headers: {
-          'x-organization-id': 'current-org-id',
-        },
-      });
+      const response = await fetch(`/api/audit/events?${params}`);
 
       if (response.ok) {
         const data = await response.json();
         if (page === 0) {
-          setEvents(data.events);
+          setEvents(data.events || []);
         } else {
-          setEvents(prev => [...prev, ...data.events]);
+          setEvents((prev) => [...prev, ...(data.events || [])]);
         }
-        setHasMore(data.pagination.hasMore);
+        setHasMore(data.pagination?.hasMore || false);
       }
     } catch (error) {
       console.error('Failed to fetch audit events:', error);
@@ -116,29 +165,22 @@ export default function AuditPage() {
   };
 
   const fetchAuditStats = async () => {
+    if (!organizationId) return;
+
     try {
       const params = new URLSearchParams();
       if (startDate) params.append('startDate', startDate.toISOString());
       if (endDate) params.append('endDate', endDate.toISOString());
 
-      const response = await fetch(`/api/audit/stats?${params}`, {
-        headers: {
-          'x-organization-id': 'current-org-id',
-        },
-      });
+      const response = await fetch(`/api/audit/stats?${params}`);
 
       if (response.ok) {
         const data = await response.json();
-        setStats(data.audit);
+        setStats(data.stats || null);
       }
     } catch (error) {
       console.error('Failed to fetch audit stats:', error);
     }
-  };
-
-  const handleFilterChange = () => {
-    setPage(0);
-    setEvents([]);
   };
 
   const handleEventClick = (event: AuditEvent) => {
@@ -147,7 +189,7 @@ export default function AuditPage() {
   };
 
   const loadMore = () => {
-    setPage(prev => prev + 1);
+    setPage((prev) => prev + 1);
   };
 
   const clearFilters = () => {
@@ -162,8 +204,41 @@ export default function AuditPage() {
   };
 
   const exportAuditLog = async () => {
-    // This would generate and download a CSV/JSON export
-    console.log('Export audit log functionality would go here');
+    if (!organizationId) return;
+
+    try {
+      const params = new URLSearchParams({
+        format: 'csv',
+      });
+
+      if (selectedEventType && selectedEventType !== 'all')
+        params.append('eventType', selectedEventType);
+      if (selectedActorType && selectedActorType !== 'all')
+        params.append('source', selectedActorType);
+      if (selectedAggregateType && selectedAggregateType !== 'all')
+        params.append('resourceType', selectedAggregateType);
+      if (startDate) params.append('startDate', startDate.toISOString());
+      if (endDate) params.append('endDate', endDate.toISOString());
+
+      const response = await fetch(`/api/audit/export?${params}`);
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = `audit-events-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        console.error('Failed to export audit log');
+      }
+    } catch (error) {
+      console.error('Failed to export audit log:', error);
+    }
   };
 
   const getActorTypeIcon = (actorType: string) => {
@@ -183,16 +258,42 @@ export default function AuditPage() {
     if (eventType.includes('create')) return 'bg-green-100 text-green-800';
     if (eventType.includes('update')) return 'bg-blue-100 text-blue-800';
     if (eventType.includes('delete')) return 'bg-red-100 text-red-800';
-    if (eventType.includes('login') || eventType.includes('auth')) return 'bg-purple-100 text-purple-800';
+    if (eventType.includes('login') || eventType.includes('auth'))
+      return 'bg-purple-100 text-purple-800';
     return 'bg-gray-100 text-gray-800';
   };
 
-  const filteredEvents = events.filter(event =>
-    searchTerm === '' ||
-    event.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.aggregateId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    event.aggregateType.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredEvents = events.filter(
+    (event) =>
+      searchTerm === '' ||
+      event.eventType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.resourceId.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.resourceType.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      event.description.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  // Show loading state if session or organization is not loaded
+  if (!session?.user || !organizationId) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Audit Logs</h1>
+            <p className="text-muted-foreground">Loading...</p>
+          </div>
+        </div>
+        <div className="space-y-4">
+          {[...Array(5)].map((_, i) => (
+            <div key={i} className="flex animate-pulse items-center space-x-4">
+              <div className="bg-muted h-4 w-4 rounded"></div>
+              <div className="bg-muted h-4 flex-1 rounded"></div>
+              <div className="bg-muted h-4 w-20 rounded"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -215,52 +316,44 @@ export default function AuditPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Events</CardTitle>
-              <Activity className="h-4 w-4 text-muted-foreground" />
+              <Activity className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.totalEvents}</div>
-              <p className="text-xs text-muted-foreground">
-                {Object.keys(stats.eventTypes).length} event types
-              </p>
+              <div className="text-2xl font-bold">{stats.totals.events}</div>
+              <p className="text-muted-foreground text-xs">{stats.totals.eventTypes} event types</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">User Actions</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Unique Users</CardTitle>
+              <Users className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.actorTypes.user || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                {((stats.actorTypes.user || 0) / stats.totalEvents * 100).toFixed(1)}% of total
-              </p>
+              <div className="text-2xl font-bold">{stats.totals.uniqueUsers}</div>
+              <p className="text-muted-foreground text-xs">Active users</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">System Events</CardTitle>
-              <Zap className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">High Severity</CardTitle>
+              <Shield className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.actorTypes.system || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                Automated processes
-              </p>
+              <div className="text-2xl font-bold">{stats.totals.highSeverityEvents}</div>
+              <p className="text-muted-foreground text-xs">Critical events</p>
             </CardContent>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">API Events</CardTitle>
-              <Shield className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium">Failed Actions</CardTitle>
+              <Zap className="text-muted-foreground h-4 w-4" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{stats.actorTypes.api_key || 0}</div>
-              <p className="text-xs text-muted-foreground">
-                API integrations
-              </p>
+              <div className="text-2xl font-bold">{stats.totals.failedActions}</div>
+              <p className="text-muted-foreground text-xs">Error events</p>
             </CardContent>
           </Card>
         </div>
@@ -277,7 +370,7 @@ export default function AuditPage() {
         <CardContent className="space-y-4">
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <div className="relative">
-              <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="text-muted-foreground absolute top-2.5 left-2 h-4 w-4" />
               <Input
                 placeholder="Search events..."
                 value={searchTerm}
@@ -292,23 +385,24 @@ export default function AuditPage() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Types</SelectItem>
-                {stats && Object.keys(stats.eventTypes).map(type => (
-                  <SelectItem key={type} value={type}>
-                    {type} ({stats.eventTypes[type]})
-                  </SelectItem>
-                ))}
+                {stats &&
+                  stats.topEventTypes.map((type) => (
+                    <SelectItem key={type.eventType} value={type.eventType}>
+                      {type.eventType} ({type.count})
+                    </SelectItem>
+                  ))}
               </SelectContent>
             </Select>
 
             <Select value={selectedActorType} onValueChange={setSelectedActorType}>
               <SelectTrigger>
-                <SelectValue placeholder="Actor Type" />
+                <SelectValue placeholder="Source Type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Actors</SelectItem>
+                <SelectItem value="all">All Sources</SelectItem>
                 <SelectItem value="user">User</SelectItem>
                 <SelectItem value="system">System</SelectItem>
-                <SelectItem value="api_key">API Key</SelectItem>
+                <SelectItem value="api">API</SelectItem>
                 <SelectItem value="webhook">Webhook</SelectItem>
               </SelectContent>
             </Select>
@@ -342,12 +436,7 @@ export default function AuditPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={startDate}
-                  onSelect={setStartDate}
-                  initialFocus
-                />
+                <Calendar mode="single" selected={startDate} onSelect={setStartDate} initialFocus />
               </PopoverContent>
             </Popover>
 
@@ -365,12 +454,7 @@ export default function AuditPage() {
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-auto p-0">
-                <Calendar
-                  mode="single"
-                  selected={endDate}
-                  onSelect={setEndDate}
-                  initialFocus
-                />
+                <Calendar mode="single" selected={endDate} onSelect={setEndDate} initialFocus />
               </PopoverContent>
             </Popover>
 
@@ -385,42 +469,38 @@ export default function AuditPage() {
       <Card>
         <CardHeader>
           <CardTitle>Events</CardTitle>
-          <CardDescription>
-            {filteredEvents.length} events found
-          </CardDescription>
+          <CardDescription>{filteredEvents.length} events found</CardDescription>
         </CardHeader>
         <CardContent>
           {loading && events.length === 0 ? (
             <div className="space-y-4">
               {[...Array(10)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-4 animate-pulse">
-                  <div className="h-4 w-4 bg-muted rounded"></div>
-                  <div className="h-4 bg-muted rounded flex-1"></div>
-                  <div className="h-4 w-20 bg-muted rounded"></div>
+                <div key={i} className="flex animate-pulse items-center space-x-4">
+                  <div className="bg-muted h-4 w-4 rounded"></div>
+                  <div className="bg-muted h-4 flex-1 rounded"></div>
+                  <div className="bg-muted h-4 w-20 rounded"></div>
                 </div>
               ))}
             </div>
           ) : filteredEvents.length === 0 ? (
-            <div className="text-center py-8">
-              <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No events found</h3>
-              <p className="text-muted-foreground">
-                Try adjusting your filters or date range
-              </p>
+            <div className="py-8 text-center">
+              <Activity className="text-muted-foreground mx-auto mb-4 h-12 w-12" />
+              <h3 className="mb-2 text-lg font-semibold">No events found</h3>
+              <p className="text-muted-foreground">Try adjusting your filters or date range</p>
             </div>
           ) : (
             <div className="space-y-4">
               {filteredEvents.map((event) => (
                 <div
                   key={event.id}
-                  className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 cursor-pointer transition-colors"
+                  className="hover:bg-muted/50 flex cursor-pointer items-center justify-between rounded-lg border p-4 transition-colors"
                   onClick={() => handleEventClick(event)}
                 >
                   <div className="flex items-center space-x-4">
                     <div className="flex items-center space-x-2">
-                      {getActorTypeIcon(event.actorType)}
+                      {getActorTypeIcon(event.source)}
                       <Badge variant="outline" className="text-xs">
-                        {event.actorType}
+                        {event.source}
                       </Badge>
                     </div>
 
@@ -429,16 +509,16 @@ export default function AuditPage() {
                         <Badge className={cn('text-xs', getEventTypeColor(event.eventType))}>
                           {event.eventType}
                         </Badge>
-                        <span className="text-sm font-medium">
-                          {event.aggregateType}
-                        </span>
-                        <span className="text-sm text-muted-foreground">
-                          {event.aggregateId}
-                        </span>
+                        <Badge variant="secondary" className="text-xs">
+                          {event.severity}
+                        </Badge>
+                        <span className="text-sm font-medium">{event.resourceType}</span>
+                        <span className="text-muted-foreground text-sm">{event.resourceId}</span>
                       </div>
-                      <div className="text-xs text-muted-foreground mt-1">
-                        {event.ipAddress && `from ${event.ipAddress} • `}
-                        {format(new Date(event.occurredAt), 'PPp')}
+                      <div className="text-foreground mt-1 text-sm">{event.description}</div>
+                      <div className="text-muted-foreground mt-1 text-xs">
+                        {event.userName && `${event.userName} • `}
+                        {format(new Date(event.timestamp), 'PPp')}
                       </div>
                     </div>
                   </div>
@@ -451,11 +531,7 @@ export default function AuditPage() {
 
               {hasMore && (
                 <div className="flex justify-center pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={loadMore}
-                    disabled={loading}
-                  >
+                  <Button variant="outline" onClick={loadMore} disabled={loading}>
                     {loading ? 'Loading...' : 'Load More'}
                   </Button>
                 </div>

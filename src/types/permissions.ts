@@ -15,7 +15,8 @@ export type Permission =
   | 'manage_webhooks'
   | 'view_audit_logs'
   | 'manage_users'
-  | 'manage_system_settings';
+  | 'manage_system_settings'
+  | 'manage_api_keys';
 
 // Navigation item type with permission requirements
 export interface NavigationItem {

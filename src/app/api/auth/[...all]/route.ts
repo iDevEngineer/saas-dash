@@ -17,10 +17,9 @@ function addCorsHeaders(response: Response, request: NextRequest) {
       }
     } else {
       // Production: check against allowed origins
-      const allowedOrigins = [
-        process.env.BETTER_AUTH_URL,
-        process.env.NEXT_PUBLIC_APP_URL
-      ].filter(Boolean);
+      const allowedOrigins = [process.env.BETTER_AUTH_URL, process.env.NEXT_PUBLIC_APP_URL].filter(
+        Boolean
+      );
 
       if (allowedOrigins.includes(origin)) {
         allowOrigin = true;
@@ -30,7 +29,10 @@ function addCorsHeaders(response: Response, request: NextRequest) {
     if (allowOrigin) {
       response.headers.set('Access-Control-Allow-Origin', origin);
       response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-      response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Cookie');
+      response.headers.set(
+        'Access-Control-Allow-Headers',
+        'Content-Type, Authorization, X-Requested-With, Cookie'
+      );
       response.headers.set('Access-Control-Allow-Credentials', 'true');
     }
   }
@@ -60,15 +62,10 @@ export async function POST(request: NextRequest) {
 
 export async function OPTIONS(request: NextRequest) {
   try {
-    // Try Better Auth's OPTIONS handler first
-    if (authOPTIONS) {
-      const response = await authOPTIONS(request);
-      return addCorsHeaders(response, request);
-    }
+    // Return manual CORS response for OPTIONS requests
+    return addCorsHeaders(new NextResponse(null, { status: 200 }), request);
   } catch (error) {
     console.error('Auth OPTIONS error:', error);
+    return addCorsHeaders(new NextResponse('Internal Server Error', { status: 500 }), request);
   }
-
-  // Fallback to manual CORS response
-  return addCorsHeaders(new NextResponse(null, { status: 200 }), request);
 }

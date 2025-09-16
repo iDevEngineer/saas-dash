@@ -102,7 +102,7 @@ of the box.
 - ✅ 🏢 **Multi-tenancy support** - Organizations and project isolation
 - ✅ 👥 **Admin panel** - Pricing and email management
 - ✅ 📧 **Email system** - Transactional emails with Resend
-- 🔑 API key management - Coming soon
+- ✅ 🔑 **API key management** - Frontend interface with permission controls
 - 📊 Advanced analytics - Coming soon
 - 🔍 Audit logs - In development
 
@@ -380,12 +380,14 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - [x] **Email templates and notifications**
 - [x] **CI/CD with GitHub Actions**
 - [x] **E2E testing with Playwright**
+- [x] **API key management frontend** - Admin interface with permission controls
 
 ### 🚧 In Progress
 
-- [ ] API documentation with OpenAPI
+- [ ] API key management backend - Database schema and API routes
 - [ ] Audit logs and activity tracking
 - [ ] Webhook support for integrations
+- [ ] API documentation with OpenAPI
 - [ ] Advanced analytics dashboard
 
 ### 🔮 Future Enhancements
