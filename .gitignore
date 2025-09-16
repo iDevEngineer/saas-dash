@@ -21,9 +21,6 @@
 /playwright/.cache/
 /tests/screenshots/
 /tests/utils/
-tests/auth-debug.spec.ts
-reset-db-for-better-auth.ts
-seed-auth-only.ts
 src/lib/db/fix-auth-accounts.ts
 src/app/api/test-auth/
 *.test.js
@@ -145,9 +142,5 @@ logs/
 .serena/
 CLAUDE.md
 test-session.ts
-debug-*.js
-test-cors.html
 src/lib/db/migrations/
-content/
-docs/
-docs-backup/
+.cleanup/

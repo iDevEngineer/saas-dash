@@ -60,6 +60,7 @@ test.describe('Admin Navigation Tests', () => {
     await expect(page.locator('text=Admin Panel')).not.toBeVisible();
     await expect(page.locator('text=Pricing Management')).not.toBeVisible();
     await expect(page.locator('text=Email Management')).not.toBeVisible();
+    await expect(page.locator('text=API Keys')).not.toBeVisible();
 
     console.log('✅ User role navigation working correctly');
   });
@@ -90,6 +91,7 @@ test.describe('Admin Navigation Tests', () => {
     await expect(page.locator('text=Admin Panel')).toBeVisible();
     await expect(page.locator('text=Pricing Management')).toBeVisible();
     await expect(page.locator('text=Email Management')).toBeVisible();
+    await expect(page.locator('text=API Keys')).toBeVisible();
 
     console.log('✅ Admin role navigation working correctly');
   });
@@ -120,6 +122,7 @@ test.describe('Admin Navigation Tests', () => {
     await expect(page.locator('text=Admin Panel')).toBeVisible();
     await expect(page.locator('text=Pricing Management')).toBeVisible();
     await expect(page.locator('text=Email Management')).toBeVisible();
+    await expect(page.locator('text=API Keys')).toBeVisible();
 
     console.log('✅ Super admin role navigation working correctly');
   });

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { webhookEndpoints } from '@/lib/db/schema';
+import { webhookEndpoints, organizationMembers } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { AuditService } from '@/lib/audit/audit-service';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 const updateWebhookSchema = z.object({
   name: z.string().min(1).max(255).optional(),
@@ -11,10 +13,12 @@ const updateWebhookSchema = z.object({
   eventTypes: z.array(z.string()).min(1).optional(),
   headers: z.record(z.string(), z.string()).optional(),
   isActive: z.boolean().optional(),
-  retryPolicy: z.object({
-    maxAttempts: z.number().int().min(1).max(10),
-    backoffFactor: z.number().min(1).max(10),
-  }).optional(),
+  retryPolicy: z
+    .object({
+      maxAttempts: z.number().int().min(1).max(10),
+      backoffFactor: z.number().min(1).max(10),
+    })
+    .optional(),
 });
 
 interface RouteParams {
@@ -24,19 +28,27 @@ interface RouteParams {
 }
 
 // GET /api/webhooks/[id] - Get specific webhook endpoint
-export async function GET(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+export async function GET(request: NextRequest, { params }: RouteParams) {
   const resolvedParams = await params;
   try {
-    const organizationId = request.headers.get('x-organization-id');
+    // Get authenticated user session
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Organization ID required' },
-        { status: 400 }
-      );
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's organization
+    const [userOrg] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, session.user.id))
+      .limit(1);
+
+    if (!userOrg) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
     }
 
     const [webhook] = await db
@@ -45,45 +57,53 @@ export async function GET(
       .where(
         and(
           eq(webhookEndpoints.id, resolvedParams.id),
-          eq(webhookEndpoints.organizationId, organizationId)
+          eq(webhookEndpoints.organizationId, userOrg.organizationId)
         )
       );
 
     if (!webhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Webhook not found' }, { status: 404 });
     }
 
     // Remove sensitive data
     const { secretToken: _, ...webhookResponse } = webhook;
 
     return NextResponse.json({ webhook: webhookResponse });
-
   } catch (error) {
     console.error('Failed to fetch webhook:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // PUT /api/webhooks/[id] - Update webhook endpoint
-export async function PUT(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+export async function PUT(request: NextRequest, { params }: RouteParams) {
   const resolvedParams = await params;
   try {
-    const organizationId = request.headers.get('x-organization-id');
-    const userId = request.headers.get('x-user-id');
+    // Get authenticated user session
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-    if (!organizationId) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's organization
+    const [userOrg] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, session.user.id))
+      .limit(1);
+
+    if (!userOrg) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
+    }
+
+    // Check if user has admin permissions
+    if (userOrg.role !== 'admin' && userOrg.role !== 'owner') {
       return NextResponse.json(
-        { error: 'Organization ID required' },
-        { status: 400 }
+        { error: 'Insufficient permissions to update webhooks' },
+        { status: 403 }
       );
     }
 
@@ -97,15 +117,12 @@ export async function PUT(
       .where(
         and(
           eq(webhookEndpoints.id, resolvedParams.id),
-          eq(webhookEndpoints.organizationId, organizationId)
+          eq(webhookEndpoints.organizationId, userOrg.organizationId)
         )
       );
 
     if (!existingWebhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Webhook not found' }, { status: 404 });
     }
 
     const [updatedWebhook] = await db
@@ -118,15 +135,15 @@ export async function PUT(
       .where(
         and(
           eq(webhookEndpoints.id, resolvedParams.id),
-          eq(webhookEndpoints.organizationId, organizationId)
+          eq(webhookEndpoints.organizationId, userOrg.organizationId)
         )
       )
       .returning();
 
     // Record audit event
     const auditContext = AuditService.createContext(
-      organizationId,
-      userId || undefined,
+      userOrg.organizationId,
+      session.user.id,
       undefined,
       {
         ip: request.headers.get('x-forwarded-for') || 'unknown',
@@ -149,7 +166,6 @@ export async function PUT(
     const { secretToken: _, ...webhookResponse } = updatedWebhook;
 
     return NextResponse.json({ webhook: webhookResponse });
-
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -159,27 +175,39 @@ export async function PUT(
     }
 
     console.error('Failed to update webhook:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // DELETE /api/webhooks/[id] - Delete webhook endpoint
-export async function DELETE(
-  request: NextRequest,
-  { params }: RouteParams
-) {
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
   const resolvedParams = await params;
   try {
-    const organizationId = request.headers.get('x-organization-id');
-    const userId = request.headers.get('x-user-id');
+    // Get authenticated user session
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-    if (!organizationId) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's organization
+    const [userOrg] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, session.user.id))
+      .limit(1);
+
+    if (!userOrg) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
+    }
+
+    // Check if user has admin permissions
+    if (userOrg.role !== 'admin' && userOrg.role !== 'owner') {
       return NextResponse.json(
-        { error: 'Organization ID required' },
-        { status: 400 }
+        { error: 'Insufficient permissions to delete webhooks' },
+        { status: 403 }
       );
     }
 
@@ -190,15 +218,12 @@ export async function DELETE(
       .where(
         and(
           eq(webhookEndpoints.id, resolvedParams.id),
-          eq(webhookEndpoints.organizationId, organizationId)
+          eq(webhookEndpoints.organizationId, userOrg.organizationId)
         )
       );
 
     if (!webhook) {
-      return NextResponse.json(
-        { error: 'Webhook not found' },
-        { status: 404 }
-      );
+      return NextResponse.json({ error: 'Webhook not found' }, { status: 404 });
     }
 
     await db
@@ -206,14 +231,14 @@ export async function DELETE(
       .where(
         and(
           eq(webhookEndpoints.id, resolvedParams.id),
-          eq(webhookEndpoints.organizationId, organizationId)
+          eq(webhookEndpoints.organizationId, userOrg.organizationId)
         )
       );
 
     // Record audit event
     const auditContext = AuditService.createContext(
-      organizationId,
-      userId || undefined,
+      userOrg.organizationId,
+      session.user.id,
       undefined,
       {
         ip: request.headers.get('x-forwarded-for') || 'unknown',
@@ -233,12 +258,8 @@ export async function DELETE(
     );
 
     return NextResponse.json({ success: true });
-
   } catch (error) {
     console.error('Failed to delete webhook:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }

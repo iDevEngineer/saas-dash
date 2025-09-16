@@ -29,6 +29,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'manage_email',
     'manage_webhooks',
     'view_audit_logs',
+    'manage_api_keys',
   ],
   super_admin: [
     'view_dashboard',
@@ -44,6 +45,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     'view_audit_logs',
     'manage_users',
     'manage_system_settings',
+    'manage_api_keys',
   ],
 };
 

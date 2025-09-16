@@ -1,68 +1,95 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/db';
-import { webhookEndpoints, type NewWebhookEndpoint } from '@/lib/db/schema';
+import { webhookEndpoints, organizationMembers, type NewWebhookEndpoint } from '@/lib/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { AuditService } from '@/lib/audit/audit-service';
+import { auth } from '@/lib/auth';
+import { headers } from 'next/headers';
 
 const createWebhookSchema = z.object({
   name: z.string().min(1).max(255),
   url: z.string().url(),
   eventTypes: z.array(z.string()).min(1),
   headers: z.record(z.string(), z.string()).optional(),
-  retryPolicy: z.object({
-    maxAttempts: z.number().int().min(1).max(10).default(3),
-    backoffFactor: z.number().min(1).max(10).default(2),
-  }).optional(),
+  retryPolicy: z
+    .object({
+      maxAttempts: z.number().int().min(1).max(10).default(3),
+      backoffFactor: z.number().min(1).max(10).default(2),
+    })
+    .optional(),
 });
 
 // GET /api/webhooks - List webhook endpoints for organization
 export async function GET(request: NextRequest) {
   try {
-    // TODO: Get organization ID from authentication context
-    const organizationId = request.headers.get('x-organization-id');
+    // Get authenticated user session
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-    if (!organizationId) {
-      return NextResponse.json(
-        { error: 'Organization ID required' },
-        { status: 400 }
-      );
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's organization
+    const [userOrg] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, session.user.id))
+      .limit(1);
+
+    if (!userOrg) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
     }
 
     const endpoints = await db
       .select()
       .from(webhookEndpoints)
-      .where(eq(webhookEndpoints.organizationId, organizationId));
+      .where(eq(webhookEndpoints.organizationId, userOrg.organizationId));
 
     // Remove sensitive data before sending
-    const sanitizedEndpoints = endpoints.map(endpoint => ({
+    const sanitizedEndpoints = endpoints.map((endpoint) => ({
       ...endpoint,
       secretToken: '***hidden***',
     }));
 
     return NextResponse.json({ endpoints: sanitizedEndpoints });
-
   } catch (error) {
     console.error('Failed to fetch webhooks:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
 
 // POST /api/webhooks - Create new webhook endpoint
 export async function POST(request: NextRequest) {
   try {
-    // TODO: Get organization ID and user ID from authentication context
-    const organizationId = request.headers.get('x-organization-id');
-    const userId = request.headers.get('x-user-id');
+    // Get authenticated user session
+    const session = await auth.api.getSession({
+      headers: await headers(),
+    });
 
-    if (!organizationId) {
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Get user's organization
+    const [userOrg] = await db
+      .select()
+      .from(organizationMembers)
+      .where(eq(organizationMembers.userId, session.user.id))
+      .limit(1);
+
+    if (!userOrg) {
+      return NextResponse.json({ error: 'No organization found for user' }, { status: 404 });
+    }
+
+    // Check if user has admin permissions
+    if (userOrg.role !== 'admin' && userOrg.role !== 'owner') {
       return NextResponse.json(
-        { error: 'Organization ID required' },
-        { status: 400 }
+        { error: 'Insufficient permissions to create webhooks' },
+        { status: 403 }
       );
     }
 
@@ -73,7 +100,7 @@ export async function POST(request: NextRequest) {
     const secretToken = crypto.randomBytes(32).toString('hex');
 
     const webhookData: NewWebhookEndpoint = {
-      organizationId,
+      organizationId: userOrg.organizationId,
       name: validatedData.name,
       url: validatedData.url,
       secretToken,
@@ -82,15 +109,12 @@ export async function POST(request: NextRequest) {
       retryPolicy: validatedData.retryPolicy || { maxAttempts: 3, backoffFactor: 2 },
     };
 
-    const [webhook] = await db
-      .insert(webhookEndpoints)
-      .values(webhookData)
-      .returning();
+    const [webhook] = await db.insert(webhookEndpoints).values(webhookData).returning();
 
     // Record audit event
     const auditContext = AuditService.createContext(
-      organizationId,
-      userId || undefined,
+      userOrg.organizationId,
+      session.user.id,
       undefined,
       {
         ip: request.headers.get('x-forwarded-for') || 'unknown',
@@ -120,7 +144,6 @@ export async function POST(request: NextRequest) {
       },
       { status: 201 }
     );
-
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json(
@@ -130,9 +153,6 @@ export async function POST(request: NextRequest) {
     }
 
     console.error('Failed to create webhook:', error);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
   }
 }
